@@ -3,64 +3,77 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import joblib
 import os
+from sklearn.model_selection import (
+    train_test_split,
+    GridSearchCV
+)
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
     r2_score
-)
-current_dir = os.path.dirname(__file__)
-model = joblib.load(
-    os.path.join(
-        current_dir,
-        "models",
-        "random_forest_regressor.pkl"
-    )
-)
-scaler = joblib.load(
-    os.path.join(
-        current_dir,
-        "models",
-        "scaler.pkl"
-    )
-)
-feature_names = joblib.load(
-    os.path.join(
-        current_dir,
-        "models",
-        "feature_names.pkl"
-    )
 )
 st.set_page_config(
     page_title="Random Forest Regressor",
     layout="wide"
 )
 st.title("Salary Prediction using Random Forest Regressor")
-df = pd.read_csv(
-    os.path.join(
-        current_dir,
-        "data",
-        "salary.csv"
-    )
+current_dir = os.path.dirname(__file__)
+data_path = os.path.join(
+    current_dir,
+    "data",
+    "salary.csv"
 )
+df = pd.read_csv(data_path)
 st.subheader("Dataset")
 st.dataframe(df.head())
 X = df[["YearsExperience"]]
 y = df["Salary"]
-X_scaled = scaler.transform(X)
-predictions = model.predict(X_scaled)
-mae = mean_absolute_error(
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled,
     y,
-    predictions
+    test_size=0.2,
+    random_state=42
+)
+param_grid = {
+    "n_estimators":[50,100,150],
+    "max_depth":[2,4,6,None],
+    "min_samples_split":[2,5,10]
+}
+grid_search = GridSearchCV(
+    estimator=RandomForestRegressor(
+        random_state=42
+    ),
+    param_grid=param_grid,
+    cv=5,
+    scoring="r2",
+    n_jobs=-1
+)
+grid_search.fit(
+    X_train,
+    y_train
+)
+model = grid_search.best_estimator_
+st.subheader("Best Parameters")
+st.write(
+    grid_search.best_params_
+)
+y_pred = model.predict(X_test)
+mae = mean_absolute_error(
+    y_test,
+    y_pred
 )
 mse = mean_squared_error(
-    y,
-    predictions
+    y_test,
+    y_pred
 )
 r2 = r2_score(
-    y,
-    predictions
+    y_test,
+    y_pred
 )
 st.subheader("Model Evaluation")
 st.success(f"MAE: {mae:.2f}")
@@ -69,23 +82,23 @@ st.success(f"R2 Score: {r2:.2f}")
 st.subheader("Actual vs Predicted")
 fig1, ax1 = plt.subplots(figsize=(6,4))
 ax1.scatter(
-    y,
-    predictions
+    y_test,
+    y_pred
 )
 ax1.set_xlabel("Actual Salary")
 ax1.set_ylabel("Predicted Salary")
 ax1.set_title("Actual vs Predicted")
 st.pyplot(fig1)
-st.subheader("Salary Distribution")
+st.subheader("Prediction Distribution")
 fig2, ax2 = plt.subplots(figsize=(6,4))
 sns.histplot(
-    y,
+    y_test,
     kde=True,
     label="Actual",
     ax=ax2
 )
 sns.histplot(
-    predictions,
+    y_pred,
     kde=True,
     label="Predicted",
     ax=ax2
